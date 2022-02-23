@@ -1,4 +1,4 @@
-from . import skill_cotriaje as skill
+from . import skill_alexa as skill
 
 from django.urls import include, path
 from . import views
