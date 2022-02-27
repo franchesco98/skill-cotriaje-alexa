@@ -173,16 +173,14 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
 
     def handle(self, handler_input):
         slots = handler_input.request_envelope.request.intent.slots
-        print(slots)
         session_attributes = handler_input.attributes_manager.session_attributes
         intent_actual = handler_input.request_envelope.request.intent
 
         pregunta_previa = session_attributes["prev_pregunta"]
-        print("pregunta_previa", pregunta_previa)
         puntuacion_acumulada = session_attributes["puntuacion_actual"]
         es_respuesta_excluyente = False
         es_respuesta_terminante = False
-        respuesta_siguiente_pregunta = -1
+        respuesta_siguiente_pregunta_id = False
 
         respuestas_dict = {}
 
@@ -192,45 +190,46 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
                     respuestas_dict["AMAZON.YesIntent"] = pregunta_opcion
                 else:
                     respuestas_dict["AMAZON.NoIntent"] = pregunta_opcion
-            print(intent_actual)
 
             respuesta_escogida = respuestas_dict[intent_actual.name]
-            respuesta_siguiente_pregunta_id = respuesta_escogida["lab_next"] if isinstance(respuesta_escogida["lab_next"], int) else -1
-            print("respuesta_siguiente_pregunta_id", respuesta_siguiente_pregunta_id)
+            respuesta_siguiente_pregunta_id = respuesta_escogida["lab_next"]
             es_respuesta_excluyente = respuesta_escogida["lab_exclusive"]
             es_respuesta_terminante = respuesta_escogida["lab_finish"]
             puntuacion_acumulada += respuesta_escogida["lab_score"]
         else:
-            pass
-
-        print("bateria_preguntas", session_attributes["bateria_preguntas"])
+            respuesta_siguiente_pregunta_id = pregunta_previa["ques_next"]
 
         if session_attributes["puntuacion_maxima"] != puntuacion_acumulada:
             preguntas = session_attributes["preguntas_triaje"]
-            print("preguntas")
 
-            if respuesta_siguiente_pregunta_id != -1:
-                print(preguntas)
+            if respuesta_siguiente_pregunta_id:
                 siguiente_pregunta = preguntas[str(respuesta_siguiente_pregunta_id)]
 
                 prev_bateria_preguntas_id = session_attributes["prev_pagina_preguntas_id"]
-                print("prev_bateria_preguntas_id")
                 if prev_bateria_preguntas_id != siguiente_pregunta["ques_page_id"]:
                     puntuacion_maxima = session_attributes["bateria_preguntas"][str(siguiente_pregunta["ques_page_id"])]
                     session_attributes["puntuacion_maxima"] = puntuacion_maxima if puntuacion_maxima > 0 else -1
 
-                print("siguiente_pregunta", siguiente_pregunta)
-
-                respuestas_siguiente_pregunta = siguiente_pregunta["ques_labs"][0]["lab_title"] + " o " \
+                if siguiente_pregunta["ques_type"] == "simple_choice":
+                    respuestas_siguiente_pregunta = siguiente_pregunta["ques_labs"][0]["lab_title"] + " o " \
                                                 + siguiente_pregunta["ques_labs"][1]["lab_title"]
+                    speech_text = "Siguiente pregunta. Responda solo {respuestas}: {pregunta}" \
+                        .format(pregunta=siguiente_pregunta["ques_title"],
+                                respuestas=respuestas_siguiente_pregunta)
+                    handler_input.response_builder \
+                        .speak(speech_text) \
+                        .ask(siguiente_pregunta["ques_title"]) \
+                        .set_should_end_session(False)
+                else:
+                    speech_text = siguiente_pregunta["ques_title"] + "Responda de la siguiente forma: 'trabajo en', o 'trabajo de', y su profesión."
+                    handler_input.response_builder \
+                        .speak(speech_text) \
+                        .set_should_end_session(False)
 
-                speech_text = "Siguiente pregunta. Responda solo {respuestas}: {pregunta}" \
-                    .format(pregunta=siguiente_pregunta["ques_title"],
-                            respuestas=respuestas_siguiente_pregunta)
-                handler_input.response_builder \
-                    .speak(speech_text) \
-                    .ask(siguiente_pregunta["ques_title"]) \
-                    .set_should_end_session(False)
+                session_attributes["prev_pagina_preguntas_id"] = siguiente_pregunta["ques_page_id"]
+                session_attributes["prev_pregunta"] = siguiente_pregunta
+                session_attributes["puntuacion_actual"] = puntuacion_acumulada
+
             elif es_respuesta_excluyente:
                 speech_text = "Eres potencial positivo en COVID"
                 handler_input.response_builder \
@@ -241,6 +240,11 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
                 handler_input.response_builder \
                     .speak(speech_text) \
                     .set_should_end_session(True)
+        else:
+            speech_text = "Eres potencial positivo en COVID"
+            handler_input.response_builder \
+                .speak(speech_text) \
+                .set_should_end_session(True)
 
         return handler_input.response_builder.response
 
