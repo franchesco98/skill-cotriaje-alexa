@@ -24,6 +24,8 @@ from ask_sdk_model import (
 
 from .models import *
 
+from datetime import date
+
 
 sb = SkillBuilder()
 
@@ -98,6 +100,8 @@ class EmpezarTriajeIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         session_attributes = handler_input.attributes_manager.session_attributes
         auth_token = session_attributes["cotriaje_token"]
+
+        session_attributes["triage_registry"] = []
         
         triaje_str = self.get_odoo_triajes(auth_token).text
 
@@ -108,6 +112,7 @@ class EmpezarTriajeIntentHandler(AbstractRequestHandler):
         session_attributes["triaje_actual"] = triaje_result
 
         datos_triaje = triaje_result["response"][0]
+        session_attributes["triage_actual_id"] = datos_triaje["surv_id"]
         bateria_preguntas_triaje = triaje_result["response"][1]
 
         # Creamos un diccionario que relacione las ids de las páginas de preguntas con su puntuación máxima
@@ -133,6 +138,8 @@ class EmpezarTriajeIntentHandler(AbstractRequestHandler):
                                       + primera_pregunta["ques_labs"][1]["lab_title"]
 
         session_attributes["puntuacion_actual"] = 0
+
+        session_attributes["registry_pregunta_order"] = 0
 
         # Si la puntuación máxima es 0, guardaremos como valor -1.
         # Esto se debe a que hay páginas de preguntas con una o varias preguntas, cuya puntuación máxima es 0,
@@ -175,6 +182,7 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
         slots = handler_input.request_envelope.request.intent.slots
         session_attributes = handler_input.attributes_manager.session_attributes
         intent_actual = handler_input.request_envelope.request.intent
+        triage_registry = session_attributes["triage_registry"]
 
         pregunta_previa = session_attributes["prev_pregunta"]
         puntuacion_acumulada = session_attributes["puntuacion_actual"]
@@ -184,6 +192,15 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
 
         respuestas_dict = {}
 
+        registry_pregunta_order = session_attributes["registry_pregunta_order"] + 1
+        session_attributes["registry_pregunta_order"] = registry_pregunta_order
+
+        triage_registry_pregunta = {
+            "order": registry_pregunta_order,
+            "question": pregunta_previa["ques_title"],
+            "triage": session_attributes["triage_actual_id"]
+        }
+
         if pregunta_previa["ques_type"] == "simple_choice":
             for pregunta_opcion in pregunta_previa["ques_labs"]:
                 if pregunta_opcion["lab_title"] == "Sí":
@@ -192,12 +209,17 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
                     respuestas_dict["AMAZON.NoIntent"] = pregunta_opcion
 
             respuesta_escogida = respuestas_dict[intent_actual.name]
+            triage_registry_pregunta["answer"] = respuesta_escogida["lab_title"]
             respuesta_siguiente_pregunta_id = respuesta_escogida["lab_next"]
             es_respuesta_excluyente = respuesta_escogida["lab_exclusive"]
             es_respuesta_terminante = respuesta_escogida["lab_finish"]
             puntuacion_acumulada += respuesta_escogida["lab_score"]
         else:
             respuesta_siguiente_pregunta_id = pregunta_previa["ques_next"]
+            triage_registry_pregunta["answer"] = slots["respuestaUsuario"].value
+
+        triage_registry.append(triage_registry_pregunta)
+        session_attributes["triage_registry"] = triage_registry
 
         if session_attributes["puntuacion_maxima"] != puntuacion_acumulada:
             preguntas = session_attributes["preguntas_triaje"]
@@ -221,7 +243,7 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
                         .ask(siguiente_pregunta["ques_title"]) \
                         .set_should_end_session(False)
                 else:
-                    speech_text = siguiente_pregunta["ques_title"] + "Responda de la siguiente forma: 'trabajo en', o 'trabajo de', y su profesión."
+                    speech_text = siguiente_pregunta["ques_title"] + ". Responda de la siguiente forma: 'trabajo en', o 'trabajo de', y su profesión."
                     handler_input.response_builder \
                         .speak(speech_text) \
                         .set_should_end_session(False)
@@ -232,16 +254,52 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
 
             elif es_respuesta_excluyente:
                 speech_text = "Eres potencial positivo en COVID"
+
+                triage_result = {
+                    "triageResult": True,
+                    "date": date.today().strftime('%d/m/%Y'),
+                    "registry": triage_registry
+                }
+
+                r = alexa_requests("POST", "http://localhost:8068/updateTriageResult/"
+                                   + str(session_attributes["triage_actual_id"]),
+                                   auth_token=session_attributes["cotriaje_token"],
+                                   params=triage_result)
+
                 handler_input.response_builder \
                     .speak(speech_text) \
                     .set_should_end_session(True)
             else:
                 speech_text = "Eres potencial negativo en COVID"
+
+                triage_result = {
+                    "triageResult": False,
+                    "date": date.today().strftime('%d/m/%Y'),
+                    "registry": triage_registry
+                }
+
+                r = alexa_requests("POST", "http://localhost:8068/updateTriageResult/"
+                                   + str(session_attributes["triage_actual_id"]),
+                                   auth_token=session_attributes["cotriaje_token"],
+                                   params=triage_result)
+
                 handler_input.response_builder \
                     .speak(speech_text) \
                     .set_should_end_session(True)
         else:
             speech_text = "Eres potencial positivo en COVID"
+
+            triage_result = {
+                "triageResult": True,
+                "date": date.today().strftime('%d/m/%Y'),
+                "registry": triage_registry
+            }
+
+            r = alexa_requests("POST", "http://localhost:8068/updateTriageResult/"
+                               + str(session_attributes["triage_actual_id"]),
+                               auth_token=session_attributes["cotriaje_token"],
+                               params=triage_result)
+
             handler_input.response_builder \
                 .speak(speech_text) \
                 .set_should_end_session(True)
