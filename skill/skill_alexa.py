@@ -6,6 +6,7 @@ import logging
 
 import requests
 import json
+import datetime as dt
 
 from ask_sdk_core.dispatch_components import (AbstractExceptionHandler,
                                               AbstractRequestHandler)
@@ -63,6 +64,8 @@ class LaunchRequestHandler(AbstractRequestHandler):
         return handler_input.response_builder.response
 
 class CotriajeLoginIntentHandler(AbstractRequestHandler):
+    def get_odoo_listatriajes(self, auth_token):
+        return alexa_requests("GET", "http://localhost:8068/getSurveyByTriageId/1", auth_token)
     def can_handle(self, handler_input):
         return is_intent_name("CotriajeLogin")(handler_input)
 
@@ -86,24 +89,70 @@ class CotriajeLoginIntentHandler(AbstractRequestHandler):
 
         speech_text = "Ha iniciado sesión como {}".format(nombre_usuario.value)
 
-        handler_input.response_builder.speak(speech_text).set_should_end_session(False)
-        
-        return handler_input.response_builder.response
+        triajesPendientesRequest = alexa_requests("GET", "http://localhost:8068/getPendingTriagesByAuthenticatedUser", auth_token=token)
+        triajesPendientesResponse = json.loads(triajesPendientesRequest.text)
+        print(triajesPendientesResponse)
+        triajesPendientes= triajesPendientesResponse["result"]["response"]
+        tamTriajesPendientes = len(triajesPendientes)
+        print(tamTriajesPendientes)
+        triajeDict = {}
+        for t in triajesPendientes:
+            triajeDict.setdefault(t["survey"][1], []).append({"id":t["id"],"maxDate":t["maxDate"]})
+        session_attributes["triajeDict"]= triajeDict
+        if(len(triajesPendientes)== 0):
+            speech_text += "No tiene triajes pendientes"
+            handler_input.response_builder \
+                .speak(speech_text) \
+                .set_should_end_session(True)
+            return handler_input.response_builder.response
+        elif(len(triajeDict)== 1):
+            speech_text +=" Tienes un triaje pendiente de "+ list(triajeDict.keys())[0]+". Si desea realizarlo diga 'quiero realizarlo'. Si no quiere realizarlo diga 'salir'."
+            session_attributes["empezarUnicoTriaje"]= True
+            handler_input.response_builder \
+                .speak(speech_text) \
+                .set_should_end_session(True)
+            return handler_input.response_builder.response
+        else:
+            listaClavesTriajes = list(triajeDict.keys())
+            speech_text += "Tienes triajes de pendientes de {} y {}".format(", ".join(listaClavesTriajes[:-1]), listaClavesTriajes[-1])
+            handler_input.response_builder \
+                .speak(speech_text+"¿Cuál deseas realizar? Responde con 'quiero realizar el triaje' y el nombre del triaje que quiere realizar. Si no quiere realizar"
+                     "ninguno diga 'salir'") \
+                .set_should_end_session(True)
+            return handler_input.response_builder.response
 
 class EmpezarTriajeIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return is_intent_name("EmpezarTriajeIntent")(handler_input)
+        print(is_intent_name("EmpezarTriajeIntent")(handler_input) or is_intent_name("AMAZON.YesIntent"))
+        return is_intent_name("EmpezarTriajeIntent")(handler_input) \
+               or is_intent_name("RealizarUnicoTriajeIntent")
 
-    def get_odoo_triajes(self, auth_token):
-        return alexa_requests("GET", "http://localhost:8068/getSurveyByTriageId/1", auth_token)
+    def get_odoo_triajes(self, auth_token,id):
+        return alexa_requests("GET", "http://localhost:8068/getSurveyByTriageId/"+str(id), auth_token)
 
     def handle(self, handler_input):
+        slots = handler_input.request_envelope.request.intent.slots
+        intent_actual = handler_input.request_envelope.request.intent
         session_attributes = handler_input.attributes_manager.session_attributes
         auth_token = session_attributes["cotriaje_token"]
-
         session_attributes["triage_registry"] = []
-        
-        triaje_str = self.get_odoo_triajes(auth_token).text
+        triajeDict = session_attributes["triajeDict"]
+        if(is_intent_name("RealizarUnicoTriajeIntent")):
+            triajesPendientes=next(iter(triajeDict.items()))[1]
+        else:
+            for clave,valor in triajeDict:
+                if(slots["respuestaUsuario"].value in clave):
+                    triajesPendientes = valor
+                    break
+
+        triajeARealizar = {}
+        for triajePendiente in triajesPendientes:
+            if(dt.datetime.strptime(triajePendiente["maxDate"], "%Y-%m-%d").date() >= dt.datetime.today().date()):
+                triajeARealizar = triajePendiente
+                break
+
+        triaje_str = self.get_odoo_triajes(auth_token,triajeARealizar["id"]).text
+
 
         triaje = json.loads(triaje_str)
 
@@ -176,7 +225,7 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
                 or is_intent_name("AMAZON.NoIntent")
                 or is_intent_name("EmpezarTriajeIntent")
                 or is_intent_name("TriajeRespuestaPregunta")) \
-               and handler_input.request_envelope.request.dialog_state != DialogState.COMPLETED
+               and session_attributes["triaje_empezado"]
 
     def handle(self, handler_input):
         slots = handler_input.request_envelope.request.intent.slots
