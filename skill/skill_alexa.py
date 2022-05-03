@@ -392,8 +392,6 @@ sb.add_request_handler(LaunchRequestHandler())
 sb.add_request_handler(CotriajeLoginIntentHandler())
 sb.add_request_handler(EmpezarTriajeIntentHandler())
 sb.add_request_handler(TriajeRespuestaPregunta())
-sb.add_request_handler(HelpIntentHandler())
-sb.add_request_handler(CancelAndStopIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
 
 sb.add_exception_handler(AllExceptionHandler())
