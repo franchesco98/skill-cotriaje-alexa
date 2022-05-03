@@ -364,45 +364,6 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
 
         return handler_input.response_builder.response
 
-class HelloWorldIntentHandler(AbstractRequestHandler):
-    def can_handle(self, handler_input):
-        return is_intent_name("HelloWorldIntent")(handler_input)
-
-    def handle(self, handler_input):
-        speech_text = "¡Hola mundo en cotriaje Alexa!"
-
-        handler_input.response_builder.speak(speech_text).set_card(
-            SimpleCard("Hello World", speech_text)
-        ).set_should_end_session(True)
-        
-        return handler_input.response_builder.response
-
-class HelpIntentHandler(AbstractRequestHandler):
-    def can_handle(self, handler_input):
-        return is_intent_name("AMAZON.HelpIntent")(handler_input)
-
-    def handle(self, handler_input):
-        speech_text = "¡Puedes decirme hola!"
-        
-        handler_input.response_builder.speak(speech_text).ask(speech_text).set_card(
-            SimpleCard("Hello World", speech_text)
-        )
-
-        return handler_input.response_builder.response
-
-class CancelAndStopIntentHandler(AbstractRequestHandler):
-    def can_handle(self, handler_input):
-        return is_intent_name("AMAZON.CancelIntent")(handler_input) or is_intent_name("AMAZON.StopIntent")(handler_input)
-
-    def handle(self, handler_input):
-        speech_text = "¡Adiós!"
-
-        handler_input.response_builder.speak(speech_text).set_card(
-            SimpleCard("Hello World", speech_text)
-        ).set_should_end_session(True)
-
-        return handler_input.response_builder.response
-
 class SessionEndedRequestHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
