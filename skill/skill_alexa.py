@@ -89,7 +89,17 @@ class CotriajeLoginIntentHandler(AbstractRequestHandler):
 
         speech_text = "Ha iniciado sesión como {}".format(nombre_usuario.value)
 
-        triajesPendientesRequest = alexa_requests("GET", "http://localhost:8068/getPendingTriagesByAuthenticatedUser", auth_token=token)
+        return TriajesPendientes.handle(self, handler_input,speech_text)
+
+class TriajesPendientes(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return False
+
+    def handle(self, handler_input, speech_text):
+        session_attributes = handler_input.attributes_manager.session_attributes
+        auth_token = session_attributes["cotriaje_token"]
+
+        triajesPendientesRequest = alexa_requests("GET", "http://localhost:8068/getPendingTriagesByAuthenticatedUser", auth_token = auth_token)
         triajesPendientesResponse = json.loads(triajesPendientesRequest.text)
         print(triajesPendientesResponse)
         triajesPendientes= triajesPendientesResponse["result"]["response"]
@@ -121,6 +131,7 @@ class CotriajeLoginIntentHandler(AbstractRequestHandler):
                 .set_should_end_session(False)
             return handler_input.response_builder.response
 
+
 class EmpezarTriajeIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return is_intent_name("EmpezarTriajeIntent")(handler_input) \
@@ -138,7 +149,6 @@ class EmpezarTriajeIntentHandler(AbstractRequestHandler):
         triajeDict = session_attributes["triajeDict"]
         if is_intent_name("RealizarUnicoTriajeIntent")(handler_input):
             triajesPendientes=next(iter(triajeDict.items()))[1]
-            print("Único triaje")
         else:
             for clave,valor in triajeDict:
                 if(slots["respuestaUsuario"].value in clave):
@@ -251,12 +261,14 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
 
         if pregunta_previa["ques_type"] == "simple_choice":
             for pregunta_opcion in pregunta_previa["ques_labs"]:
-                if pregunta_opcion["lab_title"] == "Sí":
+                if pregunta_opcion["lab_title"].lower() == "sí" or pregunta_opcion["lab_title"].lower() == "si":
                     respuestas_dict["AMAZON.YesIntent"] = pregunta_opcion
                 else:
                     respuestas_dict["AMAZON.NoIntent"] = pregunta_opcion
+            print(respuestas_dict)
 
             respuesta_escogida = respuestas_dict[intent_actual.name]
+            print(respuesta_escogida)
             triage_registry_pregunta["answer"] = respuesta_escogida["lab_title"]
             respuesta_siguiente_pregunta_id = respuesta_escogida["lab_next"]
             es_respuesta_excluyente = respuesta_escogida["lab_exclusive"]
@@ -314,9 +326,7 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
                                    auth_token=session_attributes["cotriaje_token"],
                                    params=triage_result)
 
-                handler_input.response_builder \
-                    .speak(speech_text) \
-                    .set_should_end_session(True)
+                return TriajesPendientes.handle(self, handler_input, speech_text)
             else:
                 speech_text = "Eres potencial negativo en COVID"
 
@@ -331,9 +341,7 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
                                    auth_token=session_attributes["cotriaje_token"],
                                    params=triage_result)
 
-                handler_input.response_builder \
-                    .speak(speech_text) \
-                    .set_should_end_session(True)
+                return TriajesPendientes.handle(self, handler_input, speech_text)
         else:
             speech_text = "Eres potencial positivo en COVID"
 
@@ -348,15 +356,9 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
                                auth_token=session_attributes["cotriaje_token"],
                                params=triage_result)
 
-            handler_input.response_builder \
-                .speak(speech_text) \
-                .set_should_end_session(True)
+            return TriajesPendientes.handle(self, handler_input, speech_text)
 
         return handler_input.response_builder.response
-
-
-
-
 class HelloWorldIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return is_intent_name("HelloWorldIntent")(handler_input)
