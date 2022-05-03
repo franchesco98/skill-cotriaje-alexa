@@ -3,7 +3,7 @@ name: Despliegue en Heroku
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   build:
