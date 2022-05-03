@@ -88,6 +88,14 @@ class CotriajeLoginIntentHandler(AbstractRequestHandler):
         nombre_usuario = slots['nombreUsuario']
 
         speech_text = "Ha iniciado sesión como {}".format(nombre_usuario.value)
+        triajesPendientesRequest = alexa_requests("GET", "http://localhost:8068/getPendingTriagesByAuthenticatedUser",
+                                                  auth_token= token)
+        triajesPendientesResponse = json.loads(triajesPendientesRequest.text)
+        triajesPendientes = triajesPendientesResponse["result"]["response"]
+        triajeDict = {}
+        for t in triajesPendientes:
+            triajeDict.setdefault(t["survey"][1], []).append({"id": t["id"], "maxDate": t["maxDate"]})
+        session_attributes["triajeDict"] = triajeDict
 
         return TriajesPendientes.handle(self, handler_input,speech_text)
 
@@ -98,18 +106,9 @@ class TriajesPendientes(AbstractRequestHandler):
     def handle(self, handler_input, speech_text):
         session_attributes = handler_input.attributes_manager.session_attributes
         auth_token = session_attributes["cotriaje_token"]
+        triajeDict = session_attributes["triajeDict"]
 
-        triajesPendientesRequest = alexa_requests("GET", "http://localhost:8068/getPendingTriagesByAuthenticatedUser", auth_token = auth_token)
-        triajesPendientesResponse = json.loads(triajesPendientesRequest.text)
-        print(triajesPendientesResponse)
-        triajesPendientes= triajesPendientesResponse["result"]["response"]
-        tamTriajesPendientes = len(triajesPendientes)
-        print(tamTriajesPendientes)
-        triajeDict = {}
-        for t in triajesPendientes:
-            triajeDict.setdefault(t["survey"][1], []).append({"id":t["id"],"maxDate":t["maxDate"]})
-        session_attributes["triajeDict"]= triajeDict
-        if len(triajesPendientes)== 0:
+        if len(triajeDict)== 0:
             speech_text += "No tiene triajes pendientes"
             handler_input.response_builder \
                 .speak(speech_text) \
@@ -143,16 +142,21 @@ class EmpezarTriajeIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         slots = handler_input.request_envelope.request.intent.slots
         intent_actual = handler_input.request_envelope.request.intent
+        slot_triaje_elegido = slots["triajeElegido"].value
+        print(slots["triajeElegido"].value)
         session_attributes = handler_input.attributes_manager.session_attributes
         auth_token = session_attributes["cotriaje_token"]
         session_attributes["triage_registry"] = []
         triajeDict = session_attributes["triajeDict"]
         if is_intent_name("RealizarUnicoTriajeIntent")(handler_input):
             triajesPendientes=next(iter(triajeDict.items()))[1]
+            session_attributes["triajeDict"] = {}
         else:
-            for clave,valor in triajeDict:
-                if(slots["respuestaUsuario"].value in clave):
+            for clave,valor in triajeDict.items():
+                if(slot_triaje_elegido in clave.lower()):
                     triajesPendientes = valor
+                    del triajeDict[clave]
+                    session_attributes["triajeDict"] = triajeDict
                     break
 
         triajeARealizar = {}
@@ -359,6 +363,7 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
             return TriajesPendientes.handle(self, handler_input, speech_text)
 
         return handler_input.response_builder.response
+
 class HelloWorldIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return is_intent_name("HelloWorldIntent")(handler_input)
