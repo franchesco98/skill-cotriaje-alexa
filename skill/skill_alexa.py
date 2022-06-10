@@ -127,9 +127,9 @@ class TriajesPendientes(AbstractRequestHandler):
             return handler_input.response_builder.response
         else:
             listaClavesTriajes = list(triajeDict.keys())
-            speech_text += " Tienes triajes pendientes de {} y {}".format(", ".join(listaClavesTriajes[:-1]), listaClavesTriajes[-1])
+            speech_text += " Tienes triajes pendientes de {} y {}.".format(", ".join(listaClavesTriajes[:-1]), listaClavesTriajes[-1])
             handler_input.response_builder \
-                .speak(speech_text+"¿Cuál deseas realizar? Responde con 'quiero realizar el triaje' y el nombre del triaje que quiere realizar. Si no quiere realizar"
+                .speak(speech_text+" ¿Cuál deseas realizar? Responde con 'quiero realizar el triaje' y el nombre del triaje que quiere realizar. Si no quiere realizar "
                      "ninguno diga 'salir'") \
                 .set_should_end_session(False)
             return handler_input.response_builder.response
@@ -322,7 +322,7 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
                 session_attributes["puntuacion_actual"] = puntuacion_acumulada
 
             elif es_respuesta_excluyente:
-                speech_text = "Eres potencial positivo en COVID"
+                speech_text = "El triaje ha resultado positivo. Contacte con su médico lo antes posible."
 
                 triage_result = {
                     "triageResult": True,
@@ -337,7 +337,7 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
 
                 return TriajesPendientes.handle(self, handler_input, speech_text)
             else:
-                speech_text = "Eres potencial negativo en COVID"
+                speech_text = "El triaje ha resultado negativo."
 
                 triage_result = {
                     "triageResult": False,
@@ -352,7 +352,7 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
 
                 return TriajesPendientes.handle(self, handler_input, speech_text)
         else:
-            speech_text = "Eres potencial positivo en COVID"
+            speech_text = "El triaje ha resultado positivo. Contacte con su médico lo antes posible."
 
             triage_result = {
                 "triageResult": True,
