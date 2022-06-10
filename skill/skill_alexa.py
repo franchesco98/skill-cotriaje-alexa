@@ -59,6 +59,10 @@ class LaunchRequestHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         speech_text = "¡Bienvenido a triajes! Para iniciar sesión puedes decir, o bien 'inicia sesión', o simplemente 'soy', y tu nombre."
 
+        session_attributes = handler_input.attributes_manager.session_attributes
+
+        session_attributes["triaje_empezado"] = False
+
         handler_input.response_builder.speak(speech_text).set_should_end_session(False)
 
         return handler_input.response_builder.response
@@ -87,7 +91,7 @@ class CotriajeLoginIntentHandler(AbstractRequestHandler):
         slots = handler_input.request_envelope.request.intent.slots
         nombre_usuario = slots['nombreUsuario']
 
-        speech_text = "Ha iniciado sesión como {}".format(nombre_usuario.value)
+        speech_text = "Ha iniciado sesión como {}.".format(nombre_usuario.value)
         triajesPendientesRequest = alexa_requests("GET", "http://localhost:8068/getPendingTriagesByAuthenticatedUser",
                                                   auth_token= token)
         triajesPendientesResponse = json.loads(triajesPendientesRequest.text)
@@ -109,7 +113,7 @@ class TriajesPendientes(AbstractRequestHandler):
         triajeDict = session_attributes["triajeDict"]
 
         if len(triajeDict)== 0:
-            speech_text += "No tiene triajes pendientes"
+            speech_text += " No tiene triajes pendientes. Vuelve cuando tengas triajes pendientes por realizar. ¡Adiós!"
             handler_input.response_builder \
                 .speak(speech_text) \
                 .set_should_end_session(True)
@@ -123,7 +127,7 @@ class TriajesPendientes(AbstractRequestHandler):
             return handler_input.response_builder.response
         else:
             listaClavesTriajes = list(triajeDict.keys())
-            speech_text += "Tienes triajes de pendientes de {} y {}".format(", ".join(listaClavesTriajes[:-1]), listaClavesTriajes[-1])
+            speech_text += " Tienes triajes pendientes de {} y {}".format(", ".join(listaClavesTriajes[:-1]), listaClavesTriajes[-1])
             handler_input.response_builder \
                 .speak(speech_text+"¿Cuál deseas realizar? Responde con 'quiero realizar el triaje' y el nombre del triaje que quiere realizar. Si no quiere realizar"
                      "ninguno diga 'salir'") \
@@ -141,10 +145,8 @@ class EmpezarTriajeIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         slots = handler_input.request_envelope.request.intent.slots
-        intent_actual = handler_input.request_envelope.request.intent
-        slot_triaje_elegido = slots["triajeElegido"].value
-        print(slots["triajeElegido"].value)
         session_attributes = handler_input.attributes_manager.session_attributes
+
         auth_token = session_attributes["cotriaje_token"]
         session_attributes["triage_registry"] = []
         triajeDict = session_attributes["triajeDict"]
@@ -152,6 +154,9 @@ class EmpezarTriajeIntentHandler(AbstractRequestHandler):
             triajesPendientes=next(iter(triajeDict.items()))[1]
             session_attributes["triajeDict"] = {}
         else:
+            intent_actual = handler_input.request_envelope.request.intent
+            slot_triaje_elegido = slots["triajeElegido"].value
+            print(slots["triajeElegido"].value)
             for clave,valor in triajeDict.items():
                 if(slot_triaje_elegido in clave.lower()):
                     triajesPendientes = valor
@@ -366,12 +371,24 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
 
 class SessionEndedRequestHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        # type: (HandlerInput) -> bool
         return is_request_type("SessionEndedRequest")(handler_input)
 
     def handle(self, handler_input):
-        # type: (HandlerInput) -> Response
-        # any cleanup logic goes here
+
+        return handler_input.response_builder.response
+
+class SalirSesionAlexa(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return is_intent_name("AMAZON.StopIntent")(handler_input) \
+                or is_intent_name("AMAZON.PauseIntent")(handler_input) \
+                or is_intent_name("AMAZON.CancelIntent")(handler_input) \
+
+    def handle(self, handler_input):
+        print("Session acabada")
+
+        speech_text = "Entendido. Vuelve cuando quieras. ¡Adiós!"
+
+        handler_input.response_builder.speak(speech_text).set_should_end_session(True)
 
         return handler_input.response_builder.response
 
@@ -392,6 +409,7 @@ sb.add_request_handler(LaunchRequestHandler())
 sb.add_request_handler(CotriajeLoginIntentHandler())
 sb.add_request_handler(EmpezarTriajeIntentHandler())
 sb.add_request_handler(TriajeRespuestaPregunta())
+sb.add_request_handler(SalirSesionAlexa())
 sb.add_request_handler(SessionEndedRequestHandler())
 
 sb.add_exception_handler(AllExceptionHandler())
