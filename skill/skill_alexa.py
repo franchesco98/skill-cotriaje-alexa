@@ -241,7 +241,6 @@ class TriajeRespuestaPregunta(AbstractRequestHandler):
         session_attributes = handler_input.attributes_manager.session_attributes
         return (is_intent_name("AMAZON.YesIntent")
                 or is_intent_name("AMAZON.NoIntent")
-                or is_intent_name("EmpezarTriajeIntent")
                 or is_intent_name("TriajeRespuestaPregunta")) \
                and session_attributes["triaje_empezado"]
 
