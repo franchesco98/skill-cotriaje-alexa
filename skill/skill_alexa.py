@@ -376,21 +376,6 @@ class SessionEndedRequestHandler(AbstractRequestHandler):
 
         return handler_input.response_builder.response
 
-class SalirSesionAlexa(AbstractRequestHandler):
-    def can_handle(self, handler_input):
-        return is_intent_name("AMAZON.StopIntent")(handler_input) \
-                or is_intent_name("AMAZON.PauseIntent")(handler_input) \
-                or is_intent_name("AMAZON.CancelIntent")(handler_input) \
-
-    def handle(self, handler_input):
-        print("Session acabada")
-
-        speech_text = "Entendido. Vuelve cuando quieras. ¡Adiós!"
-
-        handler_input.response_builder.speak(speech_text).set_should_end_session(True)
-
-        return handler_input.response_builder.response
-
 class AllExceptionHandler(AbstractExceptionHandler):
     def can_handle(self, handler_input: HandlerInput, exception: Exception):
         return True
@@ -408,7 +393,6 @@ sb.add_request_handler(LaunchRequestHandler())
 sb.add_request_handler(CotriajeLoginIntentHandler())
 sb.add_request_handler(EmpezarTriajeIntentHandler())
 sb.add_request_handler(TriajeRespuestaPregunta())
-sb.add_request_handler(SalirSesionAlexa())
 sb.add_request_handler(SessionEndedRequestHandler())
 
 sb.add_exception_handler(AllExceptionHandler())
