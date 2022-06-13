@@ -179,7 +179,7 @@ class EmpezarTriajeIntentHandler(AbstractRequestHandler):
         session_attributes["triaje_actual"] = triaje_result
 
         datos_triaje = triaje_result["response"][0]
-        session_attributes["triage_actual_id"] = datos_triaje["surv_id"]
+        session_attributes["triage_actual_id"] = triajeARealizar["id"]
         bateria_preguntas_triaje = triaje_result["response"][1]
 
         # Creamos un diccionario que relacione las ids de las páginas de preguntas con su puntuación máxima
